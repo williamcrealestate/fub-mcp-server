@@ -9,7 +9,7 @@ import json
 import httpx
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 # ── CONFIG ─────────────────────────────────────────────────────────────────
 FUB_API_KEY   = os.environ.get("FUB_API_KEY", "")
@@ -26,7 +26,7 @@ OBJECTIVE_MAP = {
     "TRAFFIC":          "OUTCOME_TRAFFIC",
 }
 
-mcp = FastMCP("fub_mcp", dependencies=["httpx"])
+mcp = FastMCP("fub_mcp")
 
 
 # ── SHARED CLIENTS ──────────────────────────────────────────────────────────
