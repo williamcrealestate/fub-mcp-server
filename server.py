@@ -12,11 +12,11 @@ from pydantic import BaseModel, Field, ConfigDict
 from fastmcp import FastMCP
 
 # ── CONFIG ─────────────────────────────────────────────────────────────────
-FUB_API_KEY   = os.environ.get("FUB_API_KEY", "")
+FUB_API_KEY   = lambda: os.environ.get("FUB_API_KEY", "")
 FUB_BASE      = "https://api.followupboss.com/v1"
 META_TOKEN    = lambda: os.environ.get("META_ACCESS_TOKEN", "")
-META_BASE     = "https://graph.facebook.com/v19.0"
-ARIA_ACCOUNT  = "act_41421368"
+META_BASE     = "https://graph.facebook.com/v21.0"
+ARIA_ACCOUNT  = os.environ.get("META_AD_ACCOUNT_ID", "act_41421368")
 OBJECTIVE_MAP = {
     "REACH":            "OUTCOME_AWARENESS",
     "BRAND_AWARENESS":  "OUTCOME_AWARENESS",
@@ -32,32 +32,33 @@ mcp = FastMCP("fub_mcp")
 # ── SHARED CLIENTS ──────────────────────────────────────────────────────────
 
 def fub_auth() -> dict:
-    return {"auth": (FUB_API_KEY, ""), "headers": {"Content-Type": "application/json"}}
+    return {"auth": (FUB_API_KEY(), ""), "headers": {"Content-Type": "application/json"}}
 
-async def fub_get(path: str, params: dict = {}) -> dict:
+async def fub_get(path: str, params: Optional[dict] = None) -> dict:
     async with httpx.AsyncClient(base_url=FUB_BASE, timeout=20) as c:
-        r = await c.get(path, params=params, **fub_auth())
+        r = await c.get(path, params=params or {}, **fub_auth())
         r.raise_for_status()
         return r.json()
 
-async def fub_post(path: str, body: dict = {}) -> dict:
+async def fub_post(path: str, body: Optional[dict] = None) -> dict:
     async with httpx.AsyncClient(base_url=FUB_BASE, timeout=20) as c:
-        r = await c.post(path, json=body, **fub_auth())
+        r = await c.post(path, json=body or {}, **fub_auth())
         r.raise_for_status()
         return r.json()
 
-async def fub_put(path: str, body: dict = {}) -> dict:
+async def fub_put(path: str, body: Optional[dict] = None) -> dict:
     async with httpx.AsyncClient(base_url=FUB_BASE, timeout=20) as c:
-        r = await c.put(path, json=body, **fub_auth())
+        r = await c.put(path, json=body or {}, **fub_auth())
         r.raise_for_status()
         return r.json()
 
-async def fub_paginate(path: str, params: dict = {}, max_pages: int = 10) -> list:
+async def fub_paginate(path: str, params: Optional[dict] = None, max_pages: int = 10) -> list:
     results = []
     offset = 0
     limit = 100
+    base = params or {}
     for _ in range(max_pages):
-        data = await fub_get(path, {**params, "limit": limit, "offset": offset})
+        data = await fub_get(path, {**base, "limit": limit, "offset": offset})
         items = data.get("people") or data.get("data") or []
         results.extend(items)
         if len(items) < limit:
@@ -65,21 +66,21 @@ async def fub_paginate(path: str, params: dict = {}, max_pages: int = 10) -> lis
         offset += limit
     return results
 
-async def meta_get(path: str, params: dict = {}) -> dict:
+async def meta_get(path: str, params: Optional[dict] = None) -> dict:
     token = META_TOKEN()
     if not token:
         raise ValueError("META_ACCESS_TOKEN not set")
     async with httpx.AsyncClient(base_url=META_BASE, timeout=20) as c:
-        r = await c.get(path, params={"access_token": token, **params})
+        r = await c.get(path, params={"access_token": token, **(params or {})})
         r.raise_for_status()
         return r.json()
 
-async def meta_post(path: str, data: dict = {}) -> dict:
+async def meta_post(path: str, data: Optional[dict] = None) -> dict:
     token = META_TOKEN()
     if not token:
         raise ValueError("META_ACCESS_TOKEN not set")
     async with httpx.AsyncClient(base_url=META_BASE, timeout=20) as c:
-        r = await c.post(path, data={"access_token": token, **data})
+        r = await c.post(path, data={"access_token": token, **(data or {})})
         r.raise_for_status()
         return r.json()
 
@@ -560,7 +561,7 @@ async def fub_list_pipelines() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# META ADS — ARIA PROPERTIES (act_41421368)
+# META ADS — ARIA PROPERTIES
 # ══════════════════════════════════════════════════════════════════════════════
 
 @mcp.tool(
@@ -571,7 +572,7 @@ async def meta_list_campaigns(adAccountId: Optional[str] = None) -> str:
     """List all Meta ad campaigns for ARIA Properties.
 
     Args:
-        adAccountId: Optional override. Defaults to act_41421368 (ARIA Properties).
+        adAccountId: Optional override. Defaults to META_AD_ACCOUNT_ID env var.
 
     Returns:
         JSON list of campaigns with id, name, status, objective, daily_budget.
