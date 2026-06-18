@@ -53,17 +53,22 @@ async def fub_put(path: str, body: Optional[dict] = None) -> dict:
         return r.json()
 
 async def fub_paginate(path: str, params: Optional[dict] = None, max_pages: int = 10) -> list:
+    # FUB's offset pagination caps out around offset=1000-2000 and returns
+    # 400 beyond that; use the cursor-based next token from _metadata.next.
     results = []
-    offset = 0
+    next_token = None
     limit = 100
     base = params or {}
     for _ in range(max_pages):
-        data = await fub_get(path, {**base, "limit": limit, "offset": offset})
+        page_params = {**base, "limit": limit}
+        if next_token:
+            page_params["next"] = next_token
+        data = await fub_get(path, page_params)
         items = data.get("people") or data.get("data") or []
         results.extend(items)
-        if len(items) < limit:
+        next_token = (data.get("_metadata") or {}).get("next")
+        if not next_token or len(items) < limit:
             break
-        offset += limit
     return results
 
 async def meta_get(path: str, params: Optional[dict] = None) -> dict:
